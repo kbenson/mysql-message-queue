@@ -45,6 +45,7 @@ QueueTest->import;
 my $broker = Queue->broker(@dbi_params);
 
 my $test_sub = MessageQueueTest->can("test_$test_type");
+say "Starting test $test_type";
 my $times = $test_sub->($broker);
 
 use Data::Dumper; print Dumper $times;
