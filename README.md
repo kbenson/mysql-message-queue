@@ -32,7 +32,7 @@ The Queue and Message classes should implement the following API:
   will be 1 if omitted.  Returned messages should be instances of
   the Method class.
 
-* #### messge_count()
+* #### messge_count() [OPTIONAL]
   Provide a count of messages within the queue.  This method can be
   considered optional.
 
@@ -45,6 +45,14 @@ The Queue and Message classes should implement the following API:
 * #### message_reject()
   Release message back to the queue for another client
 
+* #### id()
+  Unique id of message
+
+* #### message()
+  Unserialized message
+
+* #### payload() [OPTIONAL]
+  Original serialized message from DB
 
 ### Notes/Conditions:
 0. A message should not be able to be accepted by multiple clients.
