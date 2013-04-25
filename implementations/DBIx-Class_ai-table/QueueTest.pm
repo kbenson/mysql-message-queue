@@ -34,7 +34,7 @@ package Queue::MessageBroker {
     use base 'DBIx::Class::ResultSet';
     use JSON;
     __PACKAGE__->load_components(
-        qw(Helper::ResultSet Helper::ResultSet::Shortcut)
+        qw(Helper::ResultSet::Shortcut)
     );
 
     sub message_queue {

@@ -7,9 +7,9 @@ package Queue {
 
     my $queue_table = 'queue_test_aitable';
     my $trans_table = 'queue_transaction';
-    sub new {
+    sub broker {
         my $class = shift;
-        my $self = bless {}, $_[0];
+        my $self = bless {}, $class;
         $self->{dbi_connect_params} = [@_];
         $self->_dbh; # Connect
         return $self;
@@ -17,10 +17,10 @@ package Queue {
     sub message_queue {
         my ($self,$payload) = @_;
         $payload = encode_json( $payload );
-        my $sth ||= $self->{sth_cache}{queue}
-                ||= $self->_dbh->prepare("INSERT INTO `$queue_table` (payload) VALUES (?)");
+        my $dbh = $self->_dbh;
+        my $sth ||= $dbh->prepare_cached("INSERT INTO `$queue_table` (payload) VALUES (?)");
         my $rv = $sth->execute($payload);
-        my $id = $self->_dbh->last_insert_id(undef, undef, undef, undef)
+        my $id = $dbh->last_insert_id(undef, undef, undef, undef)
             or die 'No message id received!';
         return $id;
     }
@@ -28,53 +28,42 @@ package Queue {
         my $self        = shift;
         my $wanted_msgs = shift || 1;
         die 'Invalid number of message' unless $wanted_msgs > 0;
-        my $dbh = $self->_dbh;
         # Get transaction id
-        my $trans_sth ||= $self->{sth_cache}{get_trans_id}
-                      ||= $dbh->prepare("INSERT INTO `$trans_table` VALUES ()");
+        my $dbh = $self->_dbh;
+        my $trans_sth ||= $dbh->prepare_cached("INSERT INTO `$trans_table` VALUES ()");
         $trans_sth->execute;
         my $trans_id = $dbh->last_insert_id(undef, undef, undef, undef)
             or die 'No transaction id received!';
         # Update messages
-        my $set_sth ||= $self->{sth_cache}{set_message_trans}
-                    ||= $dbh->prepare("UPDATE `$queue_table` SET `transaction_id` = ? WHERE `transaction_id` IS NULL LIMIT ?");
+        my $set_sth ||= $dbh->prepare_cached("UPDATE `$queue_table` SET `transaction_id` = ? WHERE `transaction_id` IS NULL LIMIT ?");
         $set_sth->execute($trans_id, $wanted_msgs);
         # Retrieve messages
-        my $get_sth ||= $self->{sth_cache}{get_messages}
-                    ||= $dbh->prepare("SELECT `id`, `payload` FROM `$queue_table` WHERE `transaction_id` = ?");
+        my $get_sth ||= $dbh->prepare_cached("SELECT `id`, `payload` FROM `$queue_table` WHERE `transaction_id` = ?");
         $get_sth->execute($trans_id);
 
-        return map Message->new($_), values $get_sth->fetchall_arrayref({})
+        return map Message->new($_, $self), values $get_sth->fetchall_arrayref({})
     }
     sub message_count {
-        my $self = shift;
-        my $sth ||= $self->{sth_cache}{message_accept}
-                ||= $self->_dbh->prepare("SELECT COUNT(*) FROM `$queue_table` WHERE `transaction_id` IS NULL");
-        $sth->execute;
-        return $sth->fetchrow_array;
+        shift->_dbh->selectrow_array("SELECT COUNT(*) FROM `$queue_table` WHERE `transaction_id` IS NULL");
     }
     sub message_accept {
         my ($self,$id) = @_;
         die 'No message id passed' unless defined $id;
-        my $sth ||= $self->{sth_cache}{message_accept}
-                ||= $self->_dbh->prepare("DELETE FROM `$queue_table` WHERE `id` = ?");
+        my $sth ||= $self->_dbh->prepare_cached("DELETE FROM `$queue_table` WHERE `id` = ?");
         $sth->execute($id);
         return 1;
     }
     sub message_reject {
         my ($self,$id) = @_;
         die 'No message id passed' unless defined $id;
-        my $sth ||= $self->{sth_cache}{message_accept}
-                ||= $self->_dbh->prepare("UPDATE `$queue_table` SET `transaction_id` = NULL WHERE `id` = ?");
+        my $sth ||= $self->_dbh->prepare_cached("UPDATE `$queue_table` SET `transaction_id` = NULL WHERE `id` = ?");
         $sth->execute($id);
         return 1;
     }
     # Helpers
     sub _dbh {
         my $self = shift;
-        return $self->{dbh} if $self->{dbh} and $self->{dbh}->ping;
-        $self->{sth_cache} = {};
-        $self->{dbh} = DBI->connect( $self->{dbi_connect_params} );
+        $self->{dbh} = DBI->connect_cached( values $self->{dbi_connect_params} );
     }
 }
 
