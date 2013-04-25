@@ -63,5 +63,5 @@ The Queue and Message classes should implement the following API:
    so need not be implemented with speed in mind. It is included here
    as a useful method for testing.
 0. We assume that Perl 5 can stand in for any language of the same
-   class (Python, Ruby, PHP), since the bottlenext should be the DB.
+   class (Python, Ruby, PHP), since the bottlenecks should be the DB.
 
