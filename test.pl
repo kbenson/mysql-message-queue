@@ -6,9 +6,47 @@ use lib 'lib';
 use MessageQueueTest;
 $|++;
 
+sub usage {
+    my $msg = shift;
+    $msg .= "\n" if $msg;
+    $msg .=
+<<EOUSAGE;
+
+Usage: $0 IMPLEMENTATION TEST
+
+    ./test.pl ./implementations/Net-RabbitMQ simple
+
+To list implementations or tests, you can use the list sub-command.
+
+    $0 list [all]
+    $0 list implementations
+    $0 list tests
+
+EOUSAGE
+}
+
+sub list {
+    my $list = shift || 'all';
+    die usage('Invalid list command') if $list and not $list =~ /\Aimplementations|tests|all\Z/;
+    if ($list =~ /\Aimplementations|all\Z/) {
+        my @implementations = glob './implementations/*';
+        my $implementations = "Implementations:\n\t" . join("\n\t", @implementations) . "\n";
+        say $implementations;
+    }
+
+    if ($list =~ /\Atests|all\Z/) {
+        my @tests = sort do { no strict 'refs'; grep { defined &{"MessageQueueTest::Tests\::$_"} } keys %{"MessageQueueTest::Tests\::"} };
+        my $tests = "Tests:\n\t" . join("\n\t", @tests) . "\n";
+        say $tests;
+    }
+
+    return 0;
+}
+
 # Make sure test dir has required files
-my $test_dir = shift or die "Usage: $0 TEST_DIR TEST\n";
-my $test_type = shift or die "Usage: $0 TEST_DIR TEST\n";
+my $test_dir = shift or die usage();
+exit list(shift) if $test_dir eq 'list';
+my $test_type = shift or die usage();
 die "$test_dir does not exist!" unless -d $test_dir;
 die "$test_dir is not readable!" unless -r $test_dir;
 die "$test_dir/QueueTest.pm does not exist!" unless -r "$test_dir/QueueTest.pm";

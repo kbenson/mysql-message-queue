@@ -65,3 +65,14 @@ The Queue and Message classes should implement the following API:
 0. We assume that Perl 5 can stand in for any language of the same
    class (Python, Ruby, PHP), since the bottlenecks should be the DB.
 
+### Running
+
+Run test.pl with the implementation's directory, then the test name.
+
+    ./test.pl implementations/Net-RabbitMQ/ simple
+
+You can use the list command to see available tests, and implementations
+
+    ./test.pl list
+
+Run ./test.pl with no params to see usage
