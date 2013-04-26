@@ -42,10 +42,11 @@ unshift @INC, $test_dir;
 require QueueTest;
 QueueTest->import;
 
-my $broker = Queue->broker(@dbi_params);
+my $broker_factory = sub { Queue->broker(@dbi_params) };
 
-my $test_sub = MessageQueueTest->can("test_$test_type");
+my $test_sub = MessageQueueTest::Tests->can($test_type)
+    or die "No such test: 'MessageQueueTest::Tests::$test_type'";
 say "Starting test $test_type";
-my $times = $test_sub->($broker);
+my $times = $test_sub->($broker_factory);
 
 use Data::Dumper; print Dumper $times;
