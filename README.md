@@ -18,40 +18,40 @@ The Queue and Message classes should implement the following API:
 
 ### Queue
 
-* #### broker($dsn, $dbuser, $dbpass, $opts)
+* #### Queue::broker($dsn, $dbuser, $dbpass, $opts)
   Provides a broker instance to call the following methods on.
   Accepts DBI connect params.
 
-* #### message_queue($message)
+* #### $broker->enqueue($message)
   Queue message for dequeuing by client. The $message should be
   any structure capable of being accurately serialized to and from
   JSON.
 
-* #### message_dequeue($count)
+* #### $broker->dequeue($count)
   Dequeue up to the requested number of messages.  The $count param
   will be 1 if omitted.  Returned messages should be instances of
   the Method class.
 
-* #### messge_count() [OPTIONAL]
+* #### $broker->count() [OPTIONAL]
   Provide a count of messages within the queue.  This method can be
   considered optional.
 
 
 ### Message
 
-* #### message_accept()
+* #### $message->accept()
   Mark message accepted (removed from queue)
 
-* #### message_reject()
+* #### $message->reject()
   Release message back to the queue for another client
 
-* #### id()
+* #### $message->id()
   Unique id of message
 
-* #### message()
+* #### $message->message()
   Unserialized message
 
-* #### payload() [OPTIONAL]
+* #### $message->payload() [OPTIONAL]
   Original serialized message from DB
 
 ### Notes/Conditions:

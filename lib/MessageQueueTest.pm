@@ -19,39 +19,39 @@ package MessageQueueTest {
         my $time = time;
 
         # Queue 4 messages with a high-resolution timestamp for data
-        $broker->message_queue({ time => time() }) for 1..4;
+        $broker->enqueue({ time => time() }) for 1..4;
         my @messages;
 
         say 'Get one message, 4 -> 3';
-        say $broker->message_count, ' messages available';
-        @messages = $broker->message_dequeue;
+        say $broker->count, ' messages available';
+        @messages = $broker->dequeue;
         say scalar(@messages) . " received";
         printf("message: %d, time: %s\n", $_->id, $_->message->{time}) for @messages;
-        $_->message_accept for @messages;
+        $_->accept for @messages;
         print "\n";
 
         say 'Get two messages, but reject them, 3 -> 3';
-        say $broker->message_count, ' messages available';
-        @messages = $broker->message_dequeue(2);
+        say $broker->count, ' messages available';
+        @messages = $broker->dequeue(2);
         say scalar(@messages) . " received";
         printf("message: %d, time: %s\n", $_->id, $_->message->{time}) for @messages;
-        $_->message_reject for @messages;
+        $_->reject for @messages;
         print "\n";
 
         say 'Get two messages, 3 -> 1';
-        say $broker->message_count, ' messages available';
-        @messages = $broker->message_dequeue(2);
+        say $broker->count, ' messages available';
+        @messages = $broker->dequeue(2);
         say scalar(@messages) . " received";
         printf("message: %d, time: %s\n", $_->id, $_->message->{time}) for @messages;
-        $_->message_accept for @messages;
+        $_->accept for @messages;
         print "\n";
 
         say 'Try to get two messages when 1 available, 1 -> 0';
-        say $broker->message_count, ' messages available';
-        @messages = $broker->message_dequeue(2);
+        say $broker->count, ' messages available';
+        @messages = $broker->dequeue(2);
         say scalar(@messages) . " received";
         printf("message: %d, time: %s\n", $_->id, $_->message->{time}) for @messages;
-        $_->message_accept for @messages;
+        $_->accept for @messages;
         print "\n";
 
         return {
@@ -79,14 +79,14 @@ package MessageQueueTest {
 
         # Enqueue 20k messages of payload
         $times{enqueue} = time;
-        $broker->message_queue($message) for 1..20_000;
+        $broker->enqueue($message) for 1..20_000;
         $times{enqueue} = time - $times{enqueue};
 
         # Dequeue 20k messages
         $times{dequeue} = time;
         for (1..20_000) {
-            my @messages = $broker->message_dequeue();
-            $_->message_accept for @messages;
+            my @messages = $broker->dequeue();
+            $_->accept for @messages;
         }
         $times{dequeue} = time - $times{dequeue};
 
@@ -130,7 +130,7 @@ package MessageQueueTest {
 
             # Enqueue 20k messages of payload
             my $threadtime = time;
-            $enqueuer->message_queue($message) for 1..$per_enqueuer_messages;
+            $enqueuer->enqueue($message) for 1..$per_enqueuer_messages;
             $threadtime = time - $threadtime;
 
             return $threadtime;
@@ -138,7 +138,7 @@ package MessageQueueTest {
 
         my @dequeuer_threads;
         push (@dequeuer_threads, threads->create(sub {
-            my $dequeuer = $P{broker_factory}();
+            my $dequeuer = $P{broker_factory}(channel => 2);
 
             # Wait for start signal
             say "Dequeuer waiting for start command";
@@ -148,8 +148,8 @@ package MessageQueueTest {
             # Dequeue 20k messages
             my $threadtime = time;
             for (1..$per_dequeuer_messages) {
-                my @messages = $dequeuer->message_dequeue($P{dequeue_amount});
-                $_->message_accept for @messages;
+                my @messages = $dequeuer->dequeue($P{dequeue_amount});
+                $_->accept for @messages;
             }
             $threadtime = time - $threadtime;
 

@@ -12,12 +12,12 @@ package Queue::Message {
     __PACKAGE__->resultset_class( 'Queue::MessageBroker' );
 
     # To "accept" a message, we delete that row. This leaves the ORM object alone
-    sub message_accept {
+    sub accept {
         my $self = shift;
         return $self->delete;
     }
     # To "reject" a message, we mark it as no longer part of a transaction
-    sub message_reject {
+    sub reject {
         my $self = shift;
         return $self->update({ transaction_id => undef })
     }
@@ -32,17 +32,18 @@ package Queue::Message {
 
 package Queue::MessageBroker {
     use base 'DBIx::Class::ResultSet';
+    use Class::Method::Modifiers;
     use JSON;
     __PACKAGE__->load_components(
         qw(Helper::ResultSet::Shortcut)
     );
 
-    sub message_queue {
+    sub enqueue {
         my ($self,$message) = @_;
         # Returns unique message id
         return $self->create({ payload => encode_json( $message ) });
     }
-    sub message_dequeue {
+    sub dequeue {
         my $self        = shift;
         my $wanted_msgs = shift || 1;
         # Get a transaction id
@@ -56,7 +57,11 @@ package Queue::MessageBroker {
         # Return marked messages
         return $self->search({ transaction_id => $trans_id })->all;
     }
-    sub message_count { shift->search({ transaction_id => undef })->count };
+    around 'count' => sub {
+        my $orig = shift;
+        my $self = shift;
+        return $self->search({ transaction_id => undef })->$orig;
+    };
 }
 
 package Queue::Transaction {

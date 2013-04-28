@@ -14,7 +14,7 @@ package Queue {
         $self->_dbh; # Connect
         return $self;
     }
-    sub message_queue {
+    sub enqueue {
         my ($self,$payload) = @_;
         $payload = encode_json( $payload );
         my $dbh = $self->_dbh;
@@ -24,7 +24,7 @@ package Queue {
             or die 'No message id received!';
         return $id;
     }
-    sub message_dequeue {
+    sub dequeue {
         my $self        = shift;
         my $wanted_msgs = shift || 1;
         die 'Invalid number of message' unless $wanted_msgs > 0;
@@ -43,7 +43,7 @@ package Queue {
 
         return map Message->new($_, $self), values $get_sth->fetchall_arrayref({})
     }
-    sub message_count {
+    sub count {
         shift->_dbh->selectrow_array("SELECT COUNT(*) FROM `$queue_table` WHERE `transaction_id` IS NULL");
     }
     sub message_accept {
@@ -80,8 +80,8 @@ package Message {
     sub id { $_[0]{id} }
     sub payload { $_[0]{payload} }
     sub message { decode_json( $_[0]{payload} ) }
-    sub message_accept { $_[0]->{_queue}->message_accept($_[0]->{id}) }
-    sub message_reject { $_[0]->{_queue}->message_reject($_[0]->{id}) }
+    sub accept { $_[0]->{_queue}->message_accept($_[0]->{id}) }
+    sub reject { $_[0]->{_queue}->message_reject($_[0]->{id}) }
 };
 
 1;

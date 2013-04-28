@@ -75,12 +75,12 @@ my $mysql_import_output = qx{mysql -h '$dbhost' -D '$dbname' -u '$dbuser' --pass
 die "Error creating schema: \n\n$mysql_import_output" unless $?>>8 == 0;
 
 # Load QueueTest
-say 'Loading Queue implementation';
+say "Loading Queue implementation: $test_dir";
 unshift @INC, $test_dir;
 require QueueTest;
 QueueTest->import;
 
-my $broker_factory = sub { Queue->broker(@dbi_params) };
+my $broker_factory = sub { Queue->broker(@dbi_params, @_) };
 
 my $test_sub = MessageQueueTest::Tests->can($test_type)
     or die "No such test: 'MessageQueueTest::Tests::$test_type'";

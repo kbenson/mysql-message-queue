@@ -10,11 +10,8 @@ package Queue {
     my $queue_name  = 'queue_test';
     sub broker {
         my $class = shift;
-        splice(@_, 0, 4); # First four params are for DBI
-        my %defaults = @_;
-        my $self = bless \%defaults, $class;
-        $self->{channel}    ||= $channel++;
-        say "channel: $self->{channel}";
+        my $self = bless {}, $class;
+        $self->{channel}    ||= $channel;
         $self->{queue_name} ||= $queue_name;
         $self->{nrmq} = Net::RabbitMQ->new;
         $self->{nrmq}->connect("localhost", { user => "guest", password => "guest" });
