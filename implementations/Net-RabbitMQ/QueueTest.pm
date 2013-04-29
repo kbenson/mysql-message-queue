@@ -16,6 +16,7 @@ package Queue {
         $self->{channel}    ||= $channel++;
         say "channel: $self->{channel}";
         $self->{queue_name} ||= $queue_name;
+        $self->{no_ack}     ||= 0;
         $self->{nrmq} = Net::RabbitMQ->new;
         $self->{nrmq}->connect("localhost", { user => "guest", password => "guest" });
         $self->{nrmq}->channel_open($self->{channel});
@@ -34,7 +35,7 @@ package Queue {
         # Look into ->basic_qos and prefetch
         for (1 .. $wanted_msgs) {
             my $amqp = $self->{nrmq}->get(
-                $self->{channel}, $self->{queue_name}, { no_ack => 0 },
+                $self->{channel}, $self->{queue_name}, { no_ack => $self->{no_ack} },
             );
             next unless $amqp;
             push @messages, Message->new($amqp, $self);
@@ -48,6 +49,7 @@ package Queue {
     }
     sub message_accept {
         my ($self,$id) = @_;
+        return 1 if $self->{no_ack};
         die 'No message id passed' unless defined $id;
         $self->{nrmq}->ack($self->{channel}, $id);
         return 1;
