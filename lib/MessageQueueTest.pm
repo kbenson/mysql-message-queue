@@ -72,19 +72,19 @@ package MessageQueueTest {
         my $broker = $P{broker_factory}();
 
         # Generate 1KiB payloads
-        my $message = ['a'x(2**10)];
+        my $message = ['a' x $P{message_size}];
 
         my $time = time;
         my %times;
 
         # Enqueue 20k messages of payload
         $times{enqueue} = time;
-        $broker->enqueue($message) for 1..20_000;
+        $broker->enqueue($message) for 1..$P{messages};
         $times{enqueue} = time - $times{enqueue};
 
         # Dequeue 20k messages
         $times{dequeue} = time;
-        for (1..20_000) {
+        for (1..$P{messages}) {
             my @messages = $broker->dequeue();
             $_->accept for @messages;
         }
@@ -176,6 +176,16 @@ package MessageQueueTest {
 
 package MessageQueueTest::Tests {
     sub simple { return MessageQueueTest::simple( broker_factory => shift ) }
+    sub sequential_1x1_200_32KiB {
+        return MessageQueueTest::sequential(
+            broker_factory  => shift,
+            messages        => 200,
+            message_size    => 32*1024,
+            enqueue_clients => 1,
+            dequeue_clients => 1,
+            dequeue_amount  => 1,
+        );
+    }
     sub simultaneous_1x1_20k_1024 {
         return MessageQueueTest::simultaneous(
             broker_factory  => shift,
