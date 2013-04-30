@@ -78,7 +78,8 @@ package Queue {
     __PACKAGE__->load_classes( 'Message', 'Transaction' );
     sub broker {
         my $class = shift;
-        $class->connect( @_ )->resultset('Message');
+        my %P = @_;
+        $class->connect( $P{dbi_dsn}, $P{dbi_user}, $P{dbi_pass}, $P{dbi_opts} )->resultset('Message');
     }
 }
 

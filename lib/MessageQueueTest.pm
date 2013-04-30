@@ -55,7 +55,8 @@ package MessageQueueTest {
         print "\n";
 
         return {
-            total_time => sprintf('%0.3f', time - $time)
+            %P,
+            timings => { total_time => sprintf('%0.3f', time - $time) },
         };
     }
 
@@ -65,33 +66,70 @@ package MessageQueueTest {
             message_size    => 2**10,
             enqueue_clients => 1,
             dequeue_clients => 1,
-            dequeue_amount  => 1,
+            batch_size      => 1,
             @_, # Overriding defaults
         );
         die 'No broker factory passed!' unless $P{broker_factory} and ref $P{broker_factory} eq 'CODE';
-        my $broker = $P{broker_factory}();
+        # This may lead to the odd message not being grabbed due to integer math, but it's okay
+        my $per_enqueuer_messages = int( $P{messages} / $P{enqueue_clients} );
+        my $per_dequeuer_messages = int( $P{messages} / $P{enqueue_clients} );
 
         # Generate 1KiB payloads
         my $message = ['a' x $P{message_size}];
 
         my $time = time;
-        my %times;
+        my %times = ( enqueue_max => 0, dequeue_max => 0);
 
-        # Enqueue 20k messages of payload
-        $times{enqueue} = time;
-        $broker->enqueue($message) for 1..$P{messages};
-        $times{enqueue} = time - $times{enqueue};
+        my @enqueuer_threads;
+        push(@enqueuer_threads, threads->create(sub {
+            my %times;
+            my $enqueuer = $P{broker_factory}();
 
-        # Dequeue 20k messages
-        $times{dequeue} = time;
-        for (1..$P{messages}) {
-            my @messages = $broker->dequeue();
-            $_->accept for @messages;
-        }
-        $times{dequeue} = time - $times{dequeue};
+            # Wait for start sugnal
+            say "Enqueuer waiting for start command";
+            #{ lock($startlock); cond_timedwait($startlock, time()+10) or die 'Thread sync wait timeout!' }
+            say "Enqueuer starting";
+
+            # Enqueue 20k messages of payload
+            my $threadtime = time;
+            $enqueuer->enqueue($message) for 1..$per_enqueuer_messages;
+            $threadtime = time - $threadtime;
+
+            return $threadtime;
+        })) for $P{enqueue_workers};
+
+        $times{"enqueue$_"} = sprintf '%0.3f', $enqueuer_threads[$_-1]->join for 1 .. @enqueuer_threads;
+        $times{enqueue_total} += $times{"enqueue$_"} for 1 .. @enqueuer_threads;
+        $times{enqueue_max} = ($times{"enqueue$_"} > $times{enqueue_max} ? $times{"enqueue$_"} : $times{enqueue_max}) for 1 .. @enqueuer_threads;
+
+        my @dequeuer_threads;
+        push (@dequeuer_threads, threads->create(sub {
+            my $dequeuer = $P{broker_factory}(channel => 2);
+
+            # Wait for start signal
+            say "Dequeuer waiting for start command";
+            #{ lock($startlock); cond_timedwait($startlock, time()+10) or die 'Thread sync wait timeout!' }
+            say "Dequeuer starting";
+
+            # Dequeue 20k messages
+            my $threadtime = time;
+            for (1..$per_dequeuer_messages) {
+                my @messages = $dequeuer->dequeue($P{batch_size});
+                $_->accept for @messages;
+            }
+            $threadtime = time - $threadtime;
+
+            return $threadtime;
+        })) for $P{dequeue_workers};
+
+        $times{"dequeue$_"} = sprintf '%0.3f', $dequeuer_threads[$_-1]->join for 1 .. @dequeuer_threads;
+        $times{dequeue_total} += $times{"dequeue$_"} for 1 .. @dequeuer_threads;
+        $times{dequeue_max} = ($times{"dequeue$_"} > $times{dequeue_max} ? $times{"dequeue$_"} : $times{dequeue_max}) for 1 .. @dequeuer_threads;
+
+        $times{total_time} = sprintf('%0.3f', time - $time);
 
         return {
-            total_time   => sprintf('%0.3f', time - $time),
+            %P,
             timings => \%times,
         };
     }
@@ -102,7 +140,7 @@ package MessageQueueTest {
             message_size    => 1024,
             enqueue_clients => 1,
             dequeue_clients => 1,
-            dequeue_amount  => 1,
+            batch_size      => 1,
             @_, # Overriding defaults
         );
         die 'No broker factory passed!' unless $P{broker_factory} and ref $P{broker_factory} eq 'CODE';
@@ -117,6 +155,7 @@ package MessageQueueTest {
         say "Message serializes to " . length(encode_json($message)) . " bytes";
 
         my $time = time;
+        my %times = ( enqueue_max => 0, dequeue_max => 0);
 
         my @enqueuer_threads;
         push(@enqueuer_threads, threads->create(sub {
@@ -148,7 +187,7 @@ package MessageQueueTest {
             # Dequeue 20k messages
             my $threadtime = time;
             for (1..$per_dequeuer_messages) {
-                my @messages = $dequeuer->dequeue($P{dequeue_amount});
+                my @messages = $dequeuer->dequeue($P{batch_size});
                 $_->accept for @messages;
             }
             $threadtime = time - $threadtime;
@@ -162,13 +201,18 @@ package MessageQueueTest {
     #say "Sending start command";
     #cond_broadcast($startlock);
 
-        my %times;
         $times{"enqueue$_"} = sprintf '%0.3f', $enqueuer_threads[$_-1]->join for 1 .. @enqueuer_threads;
+        $times{enqueue_total} += $times{"enqueue$_"} for 1 .. @enqueuer_threads;
+        $times{enqueue_max} = ($times{"enqueue$_"} > $times{enqueue_max} ? $times{"enqueue$_"} : $times{enqueue_max}) for 1 .. @enqueuer_threads;
+
         $times{"dequeue$_"} = sprintf '%0.3f', $dequeuer_threads[$_-1]->join for 1 .. @dequeuer_threads;
+        $times{dequeue_total} += $times{"dequeue$_"} for 1 .. @dequeuer_threads;
+        $times{dequeue_max} = ($times{"dequeue$_"} > $times{dequeue_max} ? $times{"dequeue$_"} : $times{dequeue_max}) for 1 .. @dequeuer_threads;
+
+        $times{total_time} = sprintf('%0.3f', time - $time);
 
         return {
             %P,
-            total_time   => sprintf('%0.3f', time - $time),
             timings => \%times,
         };
     }
@@ -176,24 +220,48 @@ package MessageQueueTest {
 
 package MessageQueueTest::Tests {
     sub simple { return MessageQueueTest::simple( broker_factory => shift ) }
+
     sub sequential_1x1_200_32KiB {
         return MessageQueueTest::sequential(
             broker_factory  => shift,
             messages        => 200,
             message_size    => 32*1024,
-            enqueue_clients => 1,
-            dequeue_clients => 1,
-            dequeue_amount  => 1,
         );
     }
-    sub simultaneous_1x1_20k_1024 {
+    sub sequential_4x1_200_32KiB {
+        return MessageQueueTest::sequential(
+            broker_factory  => shift,
+            messages        => 200,
+            message_size    => 32*1024,
+            enqueue_clients => 4,
+        );
+    }
+    sub sequential_1x4_200_32KiB {
+        return MessageQueueTest::sequential(
+            broker_factory  => shift,
+            messages        => 200,
+            message_size    => 32*1024,
+            dequeue_clients => 4,
+        );
+    }
+    sub sequential_4x4_200_32KiB {
+        return MessageQueueTest::sequential(
+            broker_factory  => shift,
+            messages        => 200,
+            message_size    => 32*1024,
+            enqueue_clients => 4,
+            dequeue_clients => 4,
+        );
+    }
+
+    sub simultaneous_4x1_20k_1024 {
         return MessageQueueTest::simultaneous(
             broker_factory  => shift,
             messages        => 20_000,
             message_size    => 1024,
             enqueue_clients => 1,
             dequeue_clients => 1,
-            dequeue_amount  => 1,
+            batch_size      => 1,
         );
     }
     sub simultaneous_1x1_200k_32 {
@@ -203,7 +271,7 @@ package MessageQueueTest::Tests {
             message_size    => 32,
             enqueue_clients => 1,
             dequeue_clients => 1,
-            dequeue_amount  => 1,
+            batch_size      => 1,
         );
     }
     sub simultaneous_1x1_200_32KiB {
@@ -213,7 +281,7 @@ package MessageQueueTest::Tests {
             message_size    => 32*1024,
             enqueue_clients => 1,
             dequeue_clients => 1,
-            dequeue_amount  => 1,
+            batch_size      => 1,
         );
     }
 }

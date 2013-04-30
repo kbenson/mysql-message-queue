@@ -11,8 +11,8 @@ package Queue {
     sub broker {
         my $class = shift;
         my $self = bless {}, $class;
-        $self->{dbi_connect_params} = [@_];
-        $self->{dbh} = DBI->connect_cached( values $self->{dbi_connect_params} );
+        my %P = @_;
+        $self->{dbh} = DBI->connect_cached( $P{dbi_dsn}, $P{dbi_user}, $P{dbi_pass}, $P{dbi_opts} );
         return $self;
     }
     sub enqueue {
